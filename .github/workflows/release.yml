@@ -1,0 +1,90 @@
+name: Release
+
+# Runs after Test succeeds on main, so a release is only ever cut from a
+# commit that has actually passed go vet/build/test — never straight off
+# the push event (which would tag before we know it's green).
+on:
+  workflow_run:
+    workflows: [Test]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0 # need full tag history to compute the next version
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Compute next version
+        id: version
+        run: |
+          set -euo pipefail
+          latest=$(git tag -l 'v*.*.*' | sort -V | tail -n1)
+          if [ -z "$latest" ]; then
+            next=v0.1.0
+          else
+            IFS='.' read -r major minor patch <<< "${latest#v}"
+            next="v${major}.${minor}.$((patch + 1))"
+          fi
+          echo "Latest tag: ${latest:-none}, next: $next"
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if this commit is already tagged
+        id: guard
+        run: |
+          if git tag --points-at HEAD | grep -q .; then
+            echo "HEAD already tagged, skipping release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # cmd/oido-tts-mcp is plain Go (no cgo, verified with CGO_ENABLED=0),
+      # so it cross-compiles for every target from one Linux runner. The
+      # desktop app itself is deliberately NOT packaged here — that needs
+      # the vendored llama-tts binary + a multi-GB GGUF model per platform
+      # (see build/Taskfile.yml's vendor:llama-tts/vendor:models), which
+      # isn't practical to fetch in CI; `task package` remains the way to
+      # produce an installable desktop build.
+      - name: Build oido-tts-mcp for all platforms
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          build() {
+            local goos=$1 goarch=$2 ext=$3
+            local name="oido-tts-mcp-${goos}-${goarch}${ext}"
+            echo "Building $name"
+            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+              go build -trimpath -ldflags="-s -w" \
+              -o "dist/$name" ./cmd/oido-tts-mcp
+          }
+          build linux   amd64 ""
+          build linux   arm64 ""
+          build darwin  amd64 ""
+          build darwin  arm64 ""
+          build windows amd64 ".exe"
+
+      - name: Create release
+        if: steps.guard.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git tag "$VERSION"
+          git push origin "$VERSION"
+          gh release create "$VERSION" dist/* \
+            --title "$VERSION" \
+            --generate-notes
