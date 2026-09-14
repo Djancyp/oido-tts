@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=oido-tts
+Exec=oido-tts
+Icon=oido-tts
+Categories=Development;
+Terminal=false
+Keywords=wails
+Version=1.0
+StartupNotify=false
