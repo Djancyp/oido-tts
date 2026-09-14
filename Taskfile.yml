@@ -55,6 +55,13 @@ tasks:
     cmds:
       - task: common:setup:docker
 
+  build:mcp:
+    summary: Builds the MCP server (exposes synthesize_speech/build_podcast over stdio)
+    cmds:
+      - task: common:vendor:llama-tts
+      - task: common:vendor:models
+      - go build -o {{.BIN_DIR}}/oido-tts-mcp ./cmd/oido-tts-mcp
+
   build:server:
     summary: Builds the application in server mode (no GUI, HTTP server only)
     cmds:

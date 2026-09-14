@@ -1,4 +1,4 @@
-package main
+package synth
 
 import (
 	"os"
@@ -7,11 +7,11 @@ import (
 	"testing"
 )
 
-// resolveBundledPaths resolves paths relative to os.Executable(), which
-// in `go test` is the compiled test binary — not something we control.
-// So this test exercises the model/mmproj split logic directly by
-// duplicating the glob+classify step against a temp dir, since that's
-// the only non-trivial branch in resolveBundledPaths worth covering.
+// resolveBundledPaths resolves paths relative to os.Executable(), which in
+// `go test` is the compiled test binary — not something we control. So
+// this test exercises the model/mmproj split logic directly by
+// duplicating the glob+classify step against a temp dir, since that's the
+// only non-trivial branch in resolveBundledPaths worth covering.
 func TestClassifyModelFiles(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{
@@ -33,8 +33,23 @@ func TestClassifyModelFiles(t *testing.T) {
 	}
 }
 
+func TestClassifyModelFiles_AmbiguousKeepsFirst(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"a.gguf", "b.gguf"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	modelPath, _ := classifyModelFiles(dir)
+
+	if modelPath == "" {
+		t.Fatal("expected one model path to win, got none")
+	}
+}
+
 func TestBuildComposeJobs_NoTagsUsesSidebarInstructThroughout(t *testing.T) {
-	jobs := buildComposeJobs("Hello there. How are you today?", "voice.wav", "calm and friendly")
+	jobs := BuildComposeJobs("Hello there. How are you today?", "voice.wav", "calm and friendly")
 	if len(jobs) == 0 {
 		t.Fatal("expected at least one job")
 	}
@@ -50,7 +65,7 @@ func TestBuildComposeJobs_NoTagsUsesSidebarInstructThroughout(t *testing.T) {
 
 func TestBuildComposeJobs_InlineTagOverridesSidebarForItsSegment(t *testing.T) {
 	text := "Calm opener here. [excited] Huge news, you won't believe it!"
-	jobs := buildComposeJobs(text, "", "calm and friendly")
+	jobs := BuildComposeJobs(text, "", "calm and friendly")
 
 	var sawDefault, sawExcited bool
 	for _, j := range jobs {
@@ -70,26 +85,11 @@ func TestBuildComposeJobs_InlineTagOverridesSidebarForItsSegment(t *testing.T) {
 }
 
 func TestBuildComposeJobs_InlineTagWithNoSidebarDefaultLeavesUntaggedPartEmpty(t *testing.T) {
-	jobs := buildComposeJobs("Plain intro. [excited] Loud part!", "", "")
+	jobs := BuildComposeJobs("Plain intro. [excited] Loud part!", "", "")
 	if len(jobs) == 0 {
 		t.Fatal("expected at least one job")
 	}
 	if jobs[0].Instruct != "" {
 		t.Errorf("first job Instruct = %q, want empty (no sidebar default set)", jobs[0].Instruct)
-	}
-}
-
-func TestClassifyModelFiles_AmbiguousKeepsFirst(t *testing.T) {
-	dir := t.TempDir()
-	for _, name := range []string{"a.gguf", "b.gguf"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	modelPath, _ := classifyModelFiles(dir)
-
-	if modelPath == "" {
-		t.Fatal("expected one model path to win, got none")
 	}
 }
