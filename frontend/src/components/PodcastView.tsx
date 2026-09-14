@@ -179,7 +179,7 @@ export function PodcastView() {
                         Language
                     </label>
                     <Select value={lang} onValueChange={setLang}>
-                        <SelectTrigger className="w-full bg-white/70">
+                        <SelectTrigger className="w-full bg-muted">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -202,7 +202,7 @@ export function PodcastView() {
                     <div className="flex gap-1.5">
                         <Button
                             variant="outline"
-                            className="w-full min-w-0 flex-1 justify-start truncate bg-white/70 font-normal"
+                            className="w-full min-w-0 flex-1 justify-start truncate bg-muted font-normal"
                             onClick={() => pickVoice('host')}
                             title={hostVoice}
                         >
@@ -212,7 +212,7 @@ export function PodcastView() {
                             <Button
                                 variant="outline"
                                 size="icon"
-                                className="shrink-0 bg-white/70"
+                                className="shrink-0 bg-muted"
                                 onClick={() => setHostVoice('')}
                                 title="Clear — use default voice"
                                 aria-label="Clear HOST voice"
@@ -235,7 +235,7 @@ export function PodcastView() {
                     <div className="flex gap-1.5">
                         <Button
                             variant="outline"
-                            className="w-full min-w-0 flex-1 justify-start truncate bg-white/70 font-normal"
+                            className="w-full min-w-0 flex-1 justify-start truncate bg-muted font-normal"
                             onClick={() => pickVoice('guest')}
                             title={guestVoice}
                         >
@@ -245,7 +245,7 @@ export function PodcastView() {
                             <Button
                                 variant="outline"
                                 size="icon"
-                                className="shrink-0 bg-white/70"
+                                className="shrink-0 bg-muted"
                                 onClick={() => setGuestVoice('')}
                                 title="Clear — use default voice"
                                 aria-label="Clear GUEST voice"
@@ -267,7 +267,7 @@ export function PodcastView() {
                     </label>
                     <Button
                         variant="outline"
-                        className="w-full justify-start truncate bg-white/70 font-normal"
+                        className="w-full justify-start truncate bg-muted font-normal"
                         onClick={pickOutputDir}
                         title={outputDir}
                     >
@@ -275,7 +275,7 @@ export function PodcastView() {
                     </Button>
                 </div>
 
-                <div className="mt-auto border-t border-black/5 pt-4 text-[11px] leading-relaxed text-muted-foreground">
+                <div className="mt-auto border-t border-border pt-4 text-[11px] leading-relaxed text-muted-foreground">
                     Runs fully on-device. No text leaves this machine.
                 </div>
             </aside>
@@ -286,7 +286,7 @@ export function PodcastView() {
                     <Button
                         disabled={!script.trim() || busy}
                         onClick={build}
-                        className="relative overflow-hidden rounded-full px-6 active:scale-95"
+                        className="relative overflow-hidden rounded-lg px-6 active:scale-95"
                     >
                         {busy && <span className="absolute inset-0 animate-pulse bg-white/20" />}
                         <span className="relative">{busy ? 'Building…' : 'Build episode'}</span>
@@ -297,50 +297,50 @@ export function PodcastView() {
                     value={script}
                     onChange={(e) => setScript(e.target.value)}
                     placeholder={SCRIPT_PLACEHOLDER}
-                    className="min-h-40 flex-1 resize-none bg-white/70 font-mono text-[14px] leading-relaxed"
+                    className="min-h-40 flex-1 resize-none bg-muted font-mono text-[14px] leading-relaxed"
                 />
                 <p className="-mt-2 text-[11px] text-muted-foreground">
-                    One turn per paragraph, each starting with <code className="rounded bg-black/5 px-1">HOST:</code> or{' '}
-                    <code className="rounded bg-black/5 px-1">GUEST:</code>. Add a style/emotion hint for one turn with a
-                    trailing <code className="rounded bg-black/5 px-1">[emotion]</code> tag, e.g.{' '}
-                    <code className="rounded bg-black/5 px-1">Wait, seriously? [surprised]</code> — a trailing bracket is
+                    One turn per paragraph, each starting with <code className="rounded bg-border px-1">HOST:</code> or{' '}
+                    <code className="rounded bg-border px-1">GUEST:</code>. Add a style/emotion hint for one turn with a
+                    trailing <code className="rounded bg-border px-1">[emotion]</code> tag, e.g.{' '}
+                    <code className="rounded bg-border px-1">Wait, seriously? [surprised]</code> — a trailing bracket is
                     always treated as a tag and won't be spoken, so avoid ending a line with one for another reason (a
                     citation, a sound cue).
                 </p>
 
-                <div className="min-h-[6.5rem] rounded-xl border border-black/5">
+                <div className="min-h-[6.5rem] rounded-xl border border-border">
                     {phase === 'idle' || phase === 'ready' ? (
                         <div className="flex h-[6.5rem] items-center justify-center text-sm text-muted-foreground">
                             Your episode will appear here
                         </div>
                     ) : phase === 'working' ? (
                         <div className="flex h-[6.5rem] flex-col items-center justify-center gap-2 px-8">
-                            <div className="h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-black/10">
+                            <div className="h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-muted">
                                 <div
-                                    className="h-full rounded-full bg-[#0066cc] transition-[width] duration-200"
+                                    className="h-full rounded-full bg-primary transition-[width] duration-200"
                                     style={{width: `${Math.max(progress, 4)}%`}}
                                 />
                             </div>
                             <div className="flex items-center gap-3">
                                 <p className="text-xs text-muted-foreground">Building… {Math.round(progress)}%</p>
-                                <button onClick={stopBuild} className="text-xs font-medium text-red-600 underline underline-offset-2">
+                                <button onClick={stopBuild} className="text-xs font-medium text-destructive underline underline-offset-2">
                                     Stop
                                 </button>
                             </div>
                         </div>
                     ) : phase === 'error' ? (
-                        <div className="flex h-full flex-col items-center justify-center gap-2 rounded-xl bg-red-500/8 px-6 py-4 text-center">
-                            <p className="text-sm font-semibold text-red-700">Couldn't build the episode.</p>
-                            <p className="max-w-md text-xs text-red-700/80">{errorMsg}</p>
-                            <button onClick={buildAgain} className="text-xs font-medium text-[#0066cc] underline underline-offset-2">
+                        <div className="flex h-full flex-col items-center justify-center gap-2 rounded-xl bg-destructive/8 px-6 py-4 text-center">
+                            <p className="text-sm font-semibold text-destructive">Couldn't build the episode.</p>
+                            <p className="max-w-md text-xs text-destructive/80">{errorMsg}</p>
+                            <button onClick={buildAgain} className="text-xs font-medium text-primary underline underline-offset-2">
                                 Try again
                             </button>
                         </div>
                     ) : (
-                        <div className="flex h-full items-center gap-4 rounded-xl bg-[#1d1d1f] px-5 py-4 text-white shadow-[3px_5px_30px_0_rgba(0,0,0,0.22)]">
+                        <div className="flex h-full items-center gap-4 rounded-xl bg-secondary px-5 py-4 text-secondary-foreground shadow-[0_4px_20px_rgba(28,27,26,0.18)]">
                             <button
                                 onClick={togglePlay}
-                                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/10"
+                                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary-foreground/10"
                                 aria-label={isPlaying ? 'Pause' : 'Play'}
                             >
                                 {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
@@ -355,12 +355,12 @@ export function PodcastView() {
                                     if (audioRef.current) audioRef.current.currentTime = t;
                                     setCurrentTime(t);
                                 }}
-                                className="h-1 flex-1 accent-[#2997ff]"
+                                className="h-1 flex-1 accent-primary"
                             />
-                            <span className="shrink-0 font-mono text-xs tabular-nums text-[#cccccc]">
+                            <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
                                 {formatTime(currentTime)} / {formatTime(duration)}
                             </span>
-                            <button onClick={buildAgain} className="shrink-0 text-xs font-medium text-[#2997ff]">
+                            <button onClick={buildAgain} className="shrink-0 text-xs font-medium text-primary">
                                 New
                             </button>
                             <audio

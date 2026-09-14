@@ -1,9 +1,7 @@
+// Flat panel per DESIGN.md section 4: Panel Surface fill, Seam border, whisper
+// shadow tinted toward Ink — no blur/glass, no glow.
 export function glassPanel(extra = ''): string {
-    return (
-        'rounded-2xl border border-white/50 bg-white/45 shadow-[0_8px_32px_rgba(31,41,55,0.10)] ' +
-        'backdrop-blur-xl backdrop-saturate-150 ' +
-        extra
-    );
+    return 'rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(28,27,26,0.06)] ' + extra;
 }
 
 export function formatTime(seconds: number): string {

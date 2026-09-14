@@ -164,7 +164,7 @@ export function ComposeView() {
                         Language
                     </label>
                     <Select value={lang} onValueChange={setLang}>
-                        <SelectTrigger className="w-full bg-white/70">
+                        <SelectTrigger className="w-full bg-muted">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -187,7 +187,7 @@ export function ComposeView() {
                     <div className="flex gap-1.5">
                         <Button
                             variant="outline"
-                            className="w-full min-w-0 flex-1 justify-start truncate bg-white/70 font-normal"
+                            className="w-full min-w-0 flex-1 justify-start truncate bg-muted font-normal"
                             onClick={pickSpeaker}
                             title={speakerFile}
                         >
@@ -197,7 +197,7 @@ export function ComposeView() {
                             <Button
                                 variant="outline"
                                 size="icon"
-                                className="shrink-0 bg-white/70"
+                                className="shrink-0 bg-muted"
                                 onClick={() => setSpeakerFile('')}
                                 title="Clear — use default voice"
                                 aria-label="Clear voice to clone"
@@ -222,11 +222,11 @@ export function ComposeView() {
                         onChange={(e) => setInstruct(e.target.value)}
                         placeholder="e.g. speak with a hint of panic creeping into your voice"
                         maxLength={500}
-                        className="min-h-16 resize-none bg-white/70 text-xs"
+                        className="min-h-16 resize-none bg-muted text-xs"
                     />
                     <p className="text-[11px] leading-relaxed text-muted-foreground">
-                        Used until a <code className="rounded bg-black/5 px-1">[emotion]</code> tag in the text below
-                        takes over — write one inline, e.g. <code className="rounded bg-black/5 px-1">...you won't
+                        Used until a <code className="rounded bg-border px-1">[emotion]</code> tag in the text below
+                        takes over — write one inline, e.g. <code className="rounded bg-border px-1">...you won't
                         believe it! [excited]</code>, and everything after it uses that style instead, until the next
                         tag.
                     </p>
@@ -239,7 +239,7 @@ export function ComposeView() {
                     </label>
                     <Button
                         variant="outline"
-                        className="w-full justify-start truncate bg-white/70 font-normal"
+                        className="w-full justify-start truncate bg-muted font-normal"
                         onClick={pickOutputDir}
                         title={outputDir}
                     >
@@ -247,7 +247,7 @@ export function ComposeView() {
                     </Button>
                 </div>
 
-                <div className="mt-auto border-t border-black/5 pt-4 text-[11px] leading-relaxed text-muted-foreground">
+                <div className="mt-auto border-t border-border pt-4 text-[11px] leading-relaxed text-muted-foreground">
                     Runs fully on-device. No text leaves this machine.
                 </div>
             </aside>
@@ -258,7 +258,7 @@ export function ComposeView() {
                     <Button
                         disabled={!text.trim() || busy}
                         onClick={speak}
-                        className="relative overflow-hidden rounded-full px-6 active:scale-95"
+                        className="relative overflow-hidden rounded-lg px-6 active:scale-95"
                     >
                         {busy && <span className="absolute inset-0 animate-pulse bg-white/20" />}
                         <span className="relative">{busy ? 'Speaking…' : 'Speak'}</span>
@@ -269,43 +269,43 @@ export function ComposeView() {
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     placeholder="The quick brown fox jumps over the lazy dog."
-                    className="min-h-40 flex-1 resize-none bg-white/70 text-[15px] leading-relaxed"
+                    className="min-h-40 flex-1 resize-none bg-muted text-[15px] leading-relaxed"
                     autoFocus
                 />
 
-                <div className="min-h-[6.5rem] rounded-xl border border-black/5">
+                <div className="min-h-[6.5rem] rounded-xl border border-border">
                     {phase === 'idle' || phase === 'composing' ? (
                         <div className="flex h-[6.5rem] items-center justify-center text-sm text-muted-foreground">
                             Your audio will appear here
                         </div>
                     ) : phase === 'working' ? (
                         <div className="flex h-[6.5rem] flex-col items-center justify-center gap-2 px-8">
-                            <div className="h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-black/10">
+                            <div className="h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-muted">
                                 <div
-                                    className="h-full rounded-full bg-[#0066cc] transition-[width] duration-200"
+                                    className="h-full rounded-full bg-primary transition-[width] duration-200"
                                     style={{width: `${Math.max(progress, 4)}%`}}
                                 />
                             </div>
                             <div className="flex items-center gap-3">
                                 <p className="text-xs text-muted-foreground">Generating… {Math.round(progress)}%</p>
-                                <button onClick={stopSynthesis} className="text-xs font-medium text-red-600 underline underline-offset-2">
+                                <button onClick={stopSynthesis} className="text-xs font-medium text-destructive underline underline-offset-2">
                                     Stop
                                 </button>
                             </div>
                         </div>
                     ) : phase === 'error' ? (
-                        <div className="flex h-full flex-col items-center justify-center gap-2 rounded-xl bg-red-500/8 px-6 py-4 text-center">
-                            <p className="text-sm font-semibold text-red-700">Couldn't generate audio.</p>
-                            <p className="max-w-md text-xs text-red-700/80">{errorMsg}</p>
-                            <button onClick={speakAgain} className="text-xs font-medium text-[#0066cc] underline underline-offset-2">
+                        <div className="flex h-full flex-col items-center justify-center gap-2 rounded-xl bg-destructive/8 px-6 py-4 text-center">
+                            <p className="text-sm font-semibold text-destructive">Couldn't generate audio.</p>
+                            <p className="max-w-md text-xs text-destructive/80">{errorMsg}</p>
+                            <button onClick={speakAgain} className="text-xs font-medium text-primary underline underline-offset-2">
                                 Try again
                             </button>
                         </div>
                     ) : (
-                        <div className="flex h-full items-center gap-4 rounded-xl bg-[#1d1d1f] px-5 py-4 text-white shadow-[3px_5px_30px_0_rgba(0,0,0,0.22)]">
+                        <div className="flex h-full items-center gap-4 rounded-xl bg-secondary px-5 py-4 text-secondary-foreground shadow-[0_4px_20px_rgba(28,27,26,0.18)]">
                             <button
                                 onClick={togglePlay}
-                                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/10"
+                                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary-foreground/10"
                                 aria-label={isPlaying ? 'Pause' : 'Play'}
                             >
                                 {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
@@ -320,12 +320,12 @@ export function ComposeView() {
                                     if (audioRef.current) audioRef.current.currentTime = t;
                                     setCurrentTime(t);
                                 }}
-                                className="h-1 flex-1 accent-[#2997ff]"
+                                className="h-1 flex-1 accent-primary"
                             />
-                            <span className="shrink-0 font-mono text-xs tabular-nums text-[#cccccc]">
+                            <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
                                 {formatTime(currentTime)} / {formatTime(duration)}
                             </span>
-                            <button onClick={speakAgain} className="shrink-0 text-xs font-medium text-[#2997ff]">
+                            <button onClick={speakAgain} className="shrink-0 text-xs font-medium text-primary">
                                 New
                             </button>
                             <audio

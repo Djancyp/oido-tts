@@ -18,16 +18,9 @@ function App() {
     return (
         <TooltipProvider>
             <div
-                className="relative flex h-screen overflow-hidden bg-[#f5f5f7]"
+                className="relative flex h-screen overflow-hidden bg-background"
                 style={{WebkitAppRegion: 'drag'} as React.CSSProperties}
             >
-                {/* Ambient blurred color field the glass panels sit on top of */}
-                <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                    <div className="absolute -left-20 -top-24 size-[420px] rounded-full bg-[#0066cc]/70 blur-3xl" />
-                    <div className="absolute -right-16 top-1/4 size-[360px] rounded-full bg-[#7c5cff]/60 blur-3xl" />
-                    <div className="absolute bottom-[-140px] left-1/3 size-[400px] rounded-full bg-[#2997ff]/55 blur-3xl" />
-                </div>
-
                 {/* pl leaves room for the icon rail (w-14, left-4, plus a gap) so
                     content never sits underneath it. no-drag opts this whole pane
                     back out of the outer div's drag region — without it, every
@@ -69,10 +62,10 @@ function App() {
                                     onClick={() => setTab(id)}
                                     aria-label={label}
                                     aria-current={tab === id ? 'page' : undefined}
-                                    className={`flex size-10 items-center justify-center rounded-xl transition-colors ${
+                                    className={`flex size-10 items-center justify-center rounded-lg border-l-2 transition-colors ${
                                         tab === id
-                                            ? 'bg-[#0066cc] text-white shadow-[0_2px_10px_rgba(0,102,204,0.35)]'
-                                            : 'text-foreground/50 hover:bg-black/5 hover:text-foreground/80'
+                                            ? 'border-primary bg-accent text-foreground'
+                                            : 'border-transparent text-muted-foreground hover:bg-accent hover:text-foreground'
                                     }`}
                                 >
                                     <Icon className="size-5" />
