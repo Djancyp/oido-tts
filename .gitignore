@@ -3,6 +3,7 @@ bin
 resources
 .env.local
 /oido-tts
+/oido-tts-mcp
 frontend/dist
 frontend/node_modules
 build/linux/appimage/build

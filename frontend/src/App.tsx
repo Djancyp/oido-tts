@@ -29,12 +29,20 @@ function App() {
                 </div>
 
                 {/* pl leaves room for the icon rail (w-14, left-4, plus a gap) so
-                    content never sits underneath it. Both views stay mounted so
-                    switching tabs mid-generation doesn't drop that job's
-                    progress/stream listeners — only one can actually be generating
-                    at a time (see App.beginJob on the backend), but its UI should
-                    keep working if you tab away and back. */}
-                <div className="flex flex-1 overflow-hidden pl-[5.5rem]">
+                    content never sits underneath it. no-drag opts this whole pane
+                    back out of the outer div's drag region — without it, every
+                    Textarea/range input/button in Compose and Podcast would sit
+                    under an OS-level window-drag area that swallows mousedown
+                    before it reaches the page, breaking text selection and the
+                    playback scrubber. Both views stay mounted so switching tabs
+                    mid-generation doesn't drop that job's progress/stream
+                    listeners — only one can actually be generating at a time (see
+                    App.beginJob on the backend), but its UI should keep working if
+                    you tab away and back. */}
+                <div
+                    className="flex flex-1 overflow-hidden pl-[5.5rem]"
+                    style={{WebkitAppRegion: 'no-drag'} as React.CSSProperties}
+                >
                     <div className={tab === 'compose' ? 'contents' : 'hidden'}>
                         <ComposeView />
                     </div>

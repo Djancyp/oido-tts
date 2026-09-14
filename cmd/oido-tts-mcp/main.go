@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -26,20 +27,35 @@ func main() {
 		log.Fatalf("oido-tts-mcp: %v", err)
 	}
 
+	// jobMu serializes every call into the engine across both tools. The
+	// MCP transport dispatches concurrent tool calls in their own
+	// goroutines (see the SDK's jsonrpc2 layer), but tts.Engine and its
+	// on-disk cache (internal/tts/cache.go) have no synchronization of
+	// their own, and each call shells out to llama-tts, which loads the
+	// full model into memory independently — the same "locking up the
+	// machine" problem App.beginJob exists to prevent on the desktop
+	// side (see appservice.go's App.synthMu doc). One job at a time here
+	// too, for the same reason.
+	var jobMu sync.Mutex
+
 	server := mcp.NewServer(&mcp.Implementation{Name: "oido-tts", Version: "1.0.0"}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "synthesize_speech",
 		Description: "Convert text to speech using a local Qwen3-TTS model. Writes a wav file " +
-			"to disk and returns its path. Runs fully on-device — no audio or text leaves the machine.",
-	}, synthesizeHandler(engine))
+			"to disk and returns its path. Runs fully on-device — no audio or text leaves the machine. " +
+			"output_dir is a local filesystem path chosen by the caller with no sandboxing beyond normal " +
+			"file permissions; only pass paths you trust.",
+	}, synthesizeHandler(engine, &jobMu))
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "build_podcast",
 		Description: "Turn a two-speaker script into one stitched podcast-style episode wav file. " +
 			"The script must use \"Speaker: line\" per paragraph (e.g. \"HOST: Welcome back.\"); " +
-			"each distinct speaker name gets its own voice. Runs fully on-device.",
-	}, buildPodcastHandler(engine))
+			"each distinct speaker name gets its own voice. Runs fully on-device. output_dir is a local " +
+			"filesystem path chosen by the caller with no sandboxing beyond normal file permissions; " +
+			"only pass paths you trust.",
+	}, buildPodcastHandler(engine, &jobMu))
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatalf("oido-tts-mcp: server error: %v", err)
@@ -88,7 +104,7 @@ type SynthesizeOutput struct {
 	Path string `json:"path" jsonschema:"filesystem path to the generated wav file"`
 }
 
-func synthesizeHandler(engine *tts.Engine) mcp.ToolHandlerFor[SynthesizeInput, SynthesizeOutput] {
+func synthesizeHandler(engine *tts.Engine, jobMu *sync.Mutex) mcp.ToolHandlerFor[SynthesizeInput, SynthesizeOutput] {
 	errf := func(format string, args ...any) (*mcp.CallToolResult, SynthesizeOutput, error) {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf(format, args...)}},
@@ -110,7 +126,10 @@ func synthesizeHandler(engine *tts.Engine) mcp.ToolHandlerFor[SynthesizeInput, S
 
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
-		if err := synth.RunSequentialJobs(ctx, engine, jobs, in.Lang, outPath, true, func(float64) {}); err != nil {
+		jobMu.Lock()
+		err = synth.RunSequentialJobs(ctx, engine, jobs, in.Lang, outPath, true, func(float64) {})
+		jobMu.Unlock()
+		if err != nil {
 			return errf("synthesis failed: %v", err)
 		}
 
@@ -138,7 +157,7 @@ type BuildPodcastOutput struct {
 	Path string `json:"path" jsonschema:"filesystem path to the generated wav file"`
 }
 
-func buildPodcastHandler(engine *tts.Engine) mcp.ToolHandlerFor[BuildPodcastInput, BuildPodcastOutput] {
+func buildPodcastHandler(engine *tts.Engine, jobMu *sync.Mutex) mcp.ToolHandlerFor[BuildPodcastInput, BuildPodcastOutput] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in BuildPodcastInput) (*mcp.CallToolResult, BuildPodcastOutput, error) {
 		errf := func(format string, args ...any) (*mcp.CallToolResult, BuildPodcastOutput, error) {
 			return &mcp.CallToolResult{
@@ -164,7 +183,10 @@ func buildPodcastHandler(engine *tts.Engine) mcp.ToolHandlerFor[BuildPodcastInpu
 
 		ctx, cancel := context.WithTimeout(ctx, 20*time.Minute)
 		defer cancel()
-		if err := synth.RunSequentialJobs(ctx, engine, jobs, in.Lang, outPath, false, func(float64) {}); err != nil {
+		jobMu.Lock()
+		err = synth.RunSequentialJobs(ctx, engine, jobs, in.Lang, outPath, false, func(float64) {})
+		jobMu.Unlock()
+		if err != nil {
 			return errf("podcast synthesis failed: %v", err)
 		}
 
