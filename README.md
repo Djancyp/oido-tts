@@ -19,6 +19,10 @@ on-device; no text or audio ever leaves the machine.
 Built with [Wails 3](https://v3.wails.io/) (Go backend, React/TypeScript
 frontend, Tailwind v4, shadcn/ui).
 
+![Compose view](docs/media/screenshot.png)
+
+Sample output (default voice, no cloning): [docs/media/sample.wav](docs/media/sample.wav)
+
 ## How it works
 
 Text is chunked into pieces sized for what Qwen3-TTS was tuned for (see
