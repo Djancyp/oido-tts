@@ -92,6 +92,60 @@ func TestParseScript_BracketOnlyTurnIsSkipped(t *testing.T) {
 	}
 }
 
+func TestParseScript_LeadingPauseTagSetsOverlap(t *testing.T) {
+	script := "HOST: So anyway, I was thinking...\n\nGUEST: [pause:-300ms] Yeah, totally!"
+	turns := ParseScript(script)
+
+	if len(turns) != 2 {
+		t.Fatalf("got %d turns, want 2: %+v", len(turns), turns)
+	}
+	if turns[0].GapBeforeMs != NoGap {
+		t.Errorf("turn 0 GapBeforeMs = %d, want NoGap (no tag)", turns[0].GapBeforeMs)
+	}
+	if turns[1].GapBeforeMs != -300 {
+		t.Errorf("turn 1 GapBeforeMs = %d, want -300", turns[1].GapBeforeMs)
+	}
+	if turns[1].Text != "Yeah, totally!" {
+		t.Errorf("turn 1 text = %q, want tag stripped", turns[1].Text)
+	}
+}
+
+func TestParseScript_LeadingAndTrailingTagsBothParsed(t *testing.T) {
+	script := "GUEST: [pause:500ms] Wait, really? [shocked]"
+	turns := ParseScript(script)
+
+	if len(turns) != 1 {
+		t.Fatalf("got %d turns, want 1: %+v", len(turns), turns)
+	}
+	if turns[0].GapBeforeMs != 500 {
+		t.Errorf("GapBeforeMs = %d, want 500", turns[0].GapBeforeMs)
+	}
+	if turns[0].Instruct != "shocked" {
+		t.Errorf("Instruct = %q, want shocked", turns[0].Instruct)
+	}
+	if turns[0].Text != "Wait, really?" {
+		t.Errorf("text = %q, want both tags stripped", turns[0].Text)
+	}
+}
+
+func TestParseScript_LeadingEmotionTagIsNotTreatedAsPause(t *testing.T) {
+	// A leading tag that isn't pause/silence syntax (e.g. an emotion tag
+	// meant to color the whole turn) must be left for extractInstructTag/
+	// spoken text, not silently eaten as a timing tag.
+	script := "HOST: [whisper] Keep it down."
+	turns := ParseScript(script)
+
+	if len(turns) != 1 {
+		t.Fatalf("got %d turns, want 1: %+v", len(turns), turns)
+	}
+	if turns[0].GapBeforeMs != NoGap {
+		t.Errorf("GapBeforeMs = %d, want NoGap", turns[0].GapBeforeMs)
+	}
+	if turns[0].Text != "[whisper] Keep it down." {
+		t.Errorf("text = %q, want leading emotion tag left in place", turns[0].Text)
+	}
+}
+
 func TestParseScript_SpeakerNameWithSpaceAndNumber(t *testing.T) {
 	script := "Guest 2: Hello there."
 	turns := ParseScript(script)

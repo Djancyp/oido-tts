@@ -95,10 +95,17 @@ func NewEngineFromEnv() (*tts.Engine, error) {
 // Job is one piece to synthesize: some text, which voice to clone (empty
 // for the model's default voice), and an optional per-job style/emotion
 // instruct (empty omits it).
+//
+// GapBeforeMs is the timing RunSequentialJobs applies before this job's
+// clip, from an inline [pause:Ns] tag in the source text; tts.NoGap means
+// no tag was given and the default chunk-boundary gap applies. A real
+// value is a signed ms offset — positive inserts silence, negative
+// overlaps this job's clip back into the tail of the previous one.
 type Job struct {
 	Text        string
 	SpeakerFile string
 	Instruct    string
+	GapBeforeMs int
 }
 
 // BuildComposeJobs splits text into synthesis jobs. text can carry inline
@@ -115,8 +122,12 @@ func BuildComposeJobs(text, speakerFile, instruct string) []Job {
 		if segInstruct == "" {
 			segInstruct = instruct
 		}
-		for _, c := range tts.ChunkText(seg.Text) {
-			jobs = append(jobs, Job{Text: c, SpeakerFile: speakerFile, Instruct: segInstruct})
+		for i, c := range tts.ChunkText(seg.Text) {
+			gap := tts.NoGap
+			if i == 0 {
+				gap = seg.GapBeforeMs // only the seam entering this segment gets the tag's gap
+			}
+			jobs = append(jobs, Job{Text: c, SpeakerFile: speakerFile, Instruct: segInstruct, GapBeforeMs: gap})
 		}
 	}
 	return jobs
@@ -246,7 +257,16 @@ func RunSequentialJobs(ctx context.Context, engine *tts.Engine, jobs []Job, lang
 		clips[i] = pcm
 	}
 
-	if err := wav.Write(outPath, wav.Concat(clips, 200)); err != nil {
+	const defaultGapMs = 200
+	gaps := make([]int, len(jobs)-1)
+	for i := range gaps {
+		gaps[i] = defaultGapMs
+		if jobs[i+1].GapBeforeMs != tts.NoGap {
+			gaps[i] = jobs[i+1].GapBeforeMs
+		}
+	}
+
+	if err := wav.Write(outPath, wav.Concat(clips, gaps)); err != nil {
 		return fmt.Errorf("write final wav: %w", err)
 	}
 	return nil

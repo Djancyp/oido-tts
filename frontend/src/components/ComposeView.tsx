@@ -228,7 +228,9 @@ export function ComposeView() {
                         Used until a <code className="rounded bg-border px-1">[emotion]</code> tag in the text below
                         takes over — write one inline, e.g. <code className="rounded bg-border px-1">...you won't
                         believe it! [excited]</code>, and everything after it uses that style instead, until the next
-                        tag.
+                        tag. Add <code className="rounded bg-border px-1">[pause:2s]</code> anywhere to insert a
+                        timed silence and continue — <code className="rounded bg-border px-1">ms</code> or{" "}
+                        <code className="rounded bg-border px-1">s</code> units, up to 30s.
                     </p>
                 </div>
 

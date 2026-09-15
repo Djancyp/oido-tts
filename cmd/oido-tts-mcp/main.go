@@ -178,7 +178,7 @@ func buildPodcastHandler(engine *tts.Engine, jobMu *sync.Mutex) mcp.ToolHandlerF
 
 		jobs := make([]synth.Job, len(turns))
 		for i, t := range turns {
-			jobs[i] = synth.Job{Text: t.Text, SpeakerFile: in.Voices[t.Speaker], Instruct: t.Instruct}
+			jobs[i] = synth.Job{Text: t.Text, SpeakerFile: in.Voices[t.Speaker], Instruct: t.Instruct, GapBeforeMs: t.GapBeforeMs}
 		}
 
 		ctx, cancel := context.WithTimeout(ctx, 20*time.Minute)

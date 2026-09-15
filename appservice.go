@@ -235,7 +235,7 @@ func (a *App) BuildPodcast(script string, voices map[string]string, lang, output
 
 	jobs := make([]synth.Job, len(turns))
 	for i, t := range turns {
-		jobs[i] = synth.Job{Text: t.Text, SpeakerFile: voices[t.Speaker], Instruct: t.Instruct}
+		jobs[i] = synth.Job{Text: t.Text, SpeakerFile: voices[t.Speaker], Instruct: t.Instruct, GapBeforeMs: t.GapBeforeMs}
 	}
 
 	app := application.Get()

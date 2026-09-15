@@ -17,34 +17,57 @@ type PCM struct {
 	SampleRate int
 }
 
-// Concat joins PCM clips in order, inserting a short silence gap
-// between them (for chunked synthesis: each chunk is a separate
-// llama-tts run, so without a gap consecutive chunks can run together
-// with no breath between sentences). All clips must share the same
-// sample rate. Returns nil for an empty input.
-func Concat(clips []*PCM, gapMs int) *PCM {
+// Concat joins PCM clips in order, inserting a silence gap between them
+// (for chunked synthesis: each chunk is a separate llama-tts run, so
+// without a gap consecutive chunks can run together with no breath between
+// sentences). gapsMs[i] is the timing before clips[i+1], so it must have
+// len(clips)-1 entries — lets a caller give some boundaries a longer pause
+// (an inline [pause:2s] tag) than others, or none at all. A negative entry
+// instead overlaps that many ms of clips[i+1] back into the tail of the
+// clip before it — two speakers talking over each other — by summing
+// samples in the overlap window (clamped to int16 range) rather than
+// concatenating; the overlap is capped to the shorter of the two clips so
+// it can never run past either one. All clips must share the same sample
+// rate. Returns nil for an empty input.
+func Concat(clips []*PCM, gapsMs []int) *PCM {
 	if len(clips) == 0 {
 		return nil
 	}
 	sampleRate := clips[0].SampleRate
-	gapSamples := sampleRate * gapMs / 1000
 
-	total := 0
-	for i, c := range clips {
-		total += len(c.Samples)
-		if i > 0 {
-			total += gapSamples
-		}
+	capHint := 0
+	for _, c := range clips {
+		capHint += len(c.Samples)
 	}
 
-	out := make([]int16, 0, total)
-	for i, c := range clips {
-		if i > 0 {
+	out := make([]int16, 0, capHint)
+	out = append(out, clips[0].Samples...)
+	for i := 1; i < len(clips); i++ {
+		next := clips[i].Samples
+		gapSamples := sampleRate * gapsMs[i-1] / 1000
+
+		if gapSamples >= 0 {
 			out = append(out, make([]int16, gapSamples)...)
+			out = append(out, next...)
+			continue
 		}
-		out = append(out, c.Samples...)
+
+		overlap := min(-gapSamples, len(clips[i-1].Samples), len(next))
+		base := len(out) - overlap
+		for j := range overlap {
+			out[base+j] = addClamped(out[base+j], next[j])
+		}
+		out = append(out, next[overlap:]...)
 	}
 	return &PCM{Samples: out, SampleRate: sampleRate}
+}
+
+// addClamped sums two samples, saturating at int16 range instead of
+// wrapping — an overlap-mixed sum that would otherwise wrap around is a far
+// worse artifact (a sharp crackle) than the mild clipping saturation gives.
+func addClamped(a, b int16) int16 {
+	sum := int32(a) + int32(b)
+	return int16(min(max(sum, math.MinInt16), math.MaxInt16))
 }
 
 // Read parses a canonical WAV file (PCM, 16-bit, mono).

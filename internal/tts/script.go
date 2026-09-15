@@ -13,6 +13,11 @@ type Turn struct {
 	// from a trailing "[...]" tag on the turn, e.g. "Host: line [excited]".
 	// Empty means no instruct for this turn.
 	Instruct string
+	// GapBeforeMs is this turn's timing relative to the previous turn,
+	// from a leading "[pause:Ns]"/"[silence:Nms]" tag, e.g.
+	// "Guest: [pause:-300ms] Yeah, totally!" to talk over the host's last
+	// 300ms. NoGap means no tag was given and the default turn gap applies.
+	GapBeforeMs int
 }
 
 // instructTagRE matches a trailing "[...]" tag on a turn's text — the
@@ -22,6 +27,11 @@ type Turn struct {
 // legitimately ends with a bracket for another reason (a citation, a
 // sound cue meant to be spoken) will have it silently eaten too.
 var instructTagRE = regexp.MustCompile(`\[([^\[\]]+)\]\s*$`)
+
+// leadingTagRE matches a "[...]" tag at the very start of a turn's text —
+// where a [pause:Ns]/[silence:Nms] timing tag lives, e.g.
+// "Guest: [pause:-300ms] Yeah, totally!" to overlap into the previous turn.
+var leadingTagRE = regexp.MustCompile(`^\[([^\[\]]+)\]\s*`)
 
 // ParseScript parses a simple "NAME: line" script into turns, one per
 // paragraph (blank-line separated). A paragraph's first line must start
@@ -51,11 +61,12 @@ func ParseScript(script string) []Turn {
 		if text == "" {
 			continue
 		}
+		text, gapMs := extractLeadingPauseTag(text)
 		text, instruct := extractInstructTag(text)
 		if text == "" {
 			continue
 		}
-		turns = append(turns, Turn{Speaker: speaker, Text: text, Instruct: instruct})
+		turns = append(turns, Turn{Speaker: speaker, Text: text, Instruct: instruct, GapBeforeMs: gapMs})
 	}
 
 	return turns
@@ -72,6 +83,23 @@ func extractInstructTag(text string) (spoken, instruct string) {
 	spoken = strings.TrimSpace(text[:m[0]])
 	instruct = text[m[2]:m[3]]
 	return spoken, instruct
+}
+
+// extractLeadingPauseTag splits a leading "[pause:Ns]"/"[silence:Nms]" tag
+// off text, returning the spoken text (tag removed, trimmed) and its
+// duration in ms (NoGap if there was no leading tag, or the leading tag
+// wasn't a pause tag — e.g. an emotion tag meant to color the whole turn is
+// left in place for extractInstructTag or the spoken text itself).
+func extractLeadingPauseTag(text string) (spoken string, gapMs int) {
+	m := leadingTagRE.FindStringSubmatchIndex(text)
+	if m == nil {
+		return text, NoGap
+	}
+	ms, ok := parsePauseTag(text[m[2]:m[3]])
+	if !ok {
+		return text, NoGap
+	}
+	return strings.TrimSpace(text[m[1]:]), ms
 }
 
 func splitParagraphs(script string) []string {

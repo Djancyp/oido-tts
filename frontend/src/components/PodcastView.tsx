@@ -305,7 +305,10 @@ export function PodcastView() {
                     trailing <code className="rounded bg-border px-1">[emotion]</code> tag, e.g.{' '}
                     <code className="rounded bg-border px-1">Wait, seriously? [surprised]</code> — a trailing bracket is
                     always treated as a tag and won't be spoken, so avoid ending a line with one for another reason (a
-                    citation, a sound cue).
+                    citation, a sound cue). Start a turn with{' '}
+                    <code className="rounded bg-border px-1">[pause:2s]</code> to add a pause before it, or a negative
+                    value like <code className="rounded bg-border px-1">[pause:-300ms]</code> to talk over the end of
+                    the previous turn instead of waiting for it to finish.
                 </p>
 
                 <div className="min-h-[6.5rem] rounded-xl border border-border">

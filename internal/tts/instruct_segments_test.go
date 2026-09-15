@@ -23,9 +23,9 @@ func TestSplitInstructSegments_TagAppliesForward(t *testing.T) {
 	got := SplitInstructSegments(text)
 
 	want := []InstructSegment{
-		{Text: "Welcome back everyone. It's good to be here.", Instruct: ""},
-		{Text: "I have huge news today, you won't believe it! Seriously, huge.", Instruct: "excited"},
-		{Text: "Anyway, let's get into it.", Instruct: "calm"},
+		{Text: "Welcome back everyone. It's good to be here.", Instruct: "", GapBeforeMs: NoGap},
+		{Text: "I have huge news today, you won't believe it! Seriously, huge.", Instruct: "excited", GapBeforeMs: NoGap},
+		{Text: "Anyway, let's get into it.", Instruct: "calm", GapBeforeMs: NoGap},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d segments, want %d: %+v", len(got), len(want), got)
@@ -63,10 +63,10 @@ func TestSplitInstructSegments_BackToBackTagsOverride(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("got %d segments, want 2: %+v", len(got), got)
 	}
-	if got[0] != (InstructSegment{Text: "Hello", Instruct: ""}) {
+	if got[0] != (InstructSegment{Text: "Hello", Instruct: "", GapBeforeMs: NoGap}) {
 		t.Errorf("segment 0 = %+v", got[0])
 	}
-	if got[1] != (InstructSegment{Text: "world", Instruct: "b"}) {
+	if got[1] != (InstructSegment{Text: "world", Instruct: "b", GapBeforeMs: NoGap}) {
 		t.Errorf("segment 1 = %+v", got[1])
 	}
 }
@@ -74,6 +74,73 @@ func TestSplitInstructSegments_BackToBackTagsOverride(t *testing.T) {
 func TestSplitInstructSegments_TagOnlyNoSpokenText(t *testing.T) {
 	if got := SplitInstructSegments("[laughs]"); got != nil {
 		t.Fatalf("got %v, want nil (tag with nothing to speak)", got)
+	}
+}
+
+func TestSplitInstructSegments_PauseTagSetsGapOnNextSegment(t *testing.T) {
+	got := SplitInstructSegments("First part. [pause:2s] Second part.")
+	want := []InstructSegment{
+		{Text: "First part.", Instruct: "", GapBeforeMs: NoGap},
+		{Text: "Second part.", Instruct: "", GapBeforeMs: 2000},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d segments, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("segment %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+func TestSplitInstructSegments_PauseTagDoesNotBecomeInstruct(t *testing.T) {
+	got := SplitInstructSegments("[pause:500ms] Hello there.")
+	if len(got) != 1 || got[0].Instruct != "" || got[0].GapBeforeMs != 500 {
+		t.Fatalf("got %+v, want empty instruct and 500ms gap", got)
+	}
+}
+
+func TestSplitInstructSegments_ExplicitZeroPauseDiffersFromNoTag(t *testing.T) {
+	got := SplitInstructSegments("First part. [pause:0s] Second part.")
+	if len(got) != 2 {
+		t.Fatalf("got %d segments, want 2: %+v", len(got), got)
+	}
+	if got[0].GapBeforeMs != NoGap {
+		t.Errorf("segment 0 GapBeforeMs = %d, want NoGap (no tag preceded it)", got[0].GapBeforeMs)
+	}
+	if got[1].GapBeforeMs != 0 {
+		t.Errorf("segment 1 GapBeforeMs = %d, want 0 (explicit [pause:0s], distinct from NoGap)", got[1].GapBeforeMs)
+	}
+}
+
+func TestSplitInstructSegments_PauseTagClampedToMax(t *testing.T) {
+	got := SplitInstructSegments("[pause:999s] Too long.")
+	if len(got) != 1 || got[0].GapBeforeMs != maxPauseMs {
+		t.Fatalf("got %+v, want gap clamped to %d", got, maxPauseMs)
+	}
+}
+
+func TestParsePauseTag(t *testing.T) {
+	tests := []struct {
+		tag    string
+		wantMs int
+		wantOk bool
+	}{
+		{"pause:500ms", 500, true},
+		{"pause:2s", 2000, true},
+		{"SILENCE:1.5s", 1500, true},
+		{"pause:2S", 2000, true},
+		{"pause:-300ms", -300, true},
+		{"pause:-1s", -1000, true},
+		{"pause:-999s", -maxPauseMs, true},
+		{"excited", 0, false},
+		{"pause:abc", 0, false},
+	}
+	for _, tt := range tests {
+		ms, ok := parsePauseTag(tt.tag)
+		if ms != tt.wantMs || ok != tt.wantOk {
+			t.Errorf("parsePauseTag(%q) = (%d, %v), want (%d, %v)", tt.tag, ms, ok, tt.wantMs, tt.wantOk)
+		}
 	}
 }
 

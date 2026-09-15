@@ -1,6 +1,7 @@
 package wav
 
 import (
+	"math"
 	"path/filepath"
 	"testing"
 )
@@ -84,7 +85,7 @@ func TestConcat(t *testing.T) {
 	a := &PCM{Samples: []int16{1, 2, 3}, SampleRate: 24000}
 	b := &PCM{Samples: []int16{4, 5}, SampleRate: 24000}
 
-	out := Concat([]*PCM{a, b}, 100)
+	out := Concat([]*PCM{a, b}, []int{100})
 
 	wantGap := 24000 * 100 / 1000
 	wantLen := len(a.Samples) + wantGap + len(b.Samples)
@@ -104,8 +105,76 @@ func TestConcat(t *testing.T) {
 	}
 }
 
+func TestConcat_NegativeGapOverlapsBySumming(t *testing.T) {
+	a := &PCM{Samples: []int16{1, 2, 3, 4, 5}, SampleRate: 1000} // 1ms/sample
+	b := &PCM{Samples: []int16{10, 20, 30}, SampleRate: 1000}
+
+	out := Concat([]*PCM{a, b}, []int{-3}) // 3ms overlap = 3 samples
+
+	want := []int16{1, 2, 3 + 10, 4 + 20, 5 + 30}
+	if len(out.Samples) != len(want) {
+		t.Fatalf("len = %d, want %d: %v", len(out.Samples), len(want), out.Samples)
+	}
+	for i, w := range want {
+		if out.Samples[i] != w {
+			t.Errorf("sample %d = %d, want %d", i, out.Samples[i], w)
+		}
+	}
+}
+
+func TestConcat_OverlapClampedToShorterClip(t *testing.T) {
+	a := &PCM{Samples: []int16{1, 2, 3}, SampleRate: 1000}
+	b := &PCM{Samples: []int16{10, 20, 30, 40, 50}, SampleRate: 1000}
+
+	// Requests 10ms of overlap, but a is only 3 samples long, so the
+	// overlap must clamp to 3 rather than reading/writing out of bounds.
+	out := Concat([]*PCM{a, b}, []int{-10})
+
+	want := []int16{1 + 10, 2 + 20, 3 + 30, 40, 50}
+	if len(out.Samples) != len(want) {
+		t.Fatalf("len = %d, want %d: %v", len(out.Samples), len(want), out.Samples)
+	}
+	for i, w := range want {
+		if out.Samples[i] != w {
+			t.Errorf("sample %d = %d, want %d", i, out.Samples[i], w)
+		}
+	}
+}
+
+func TestConcat_OverlapClampIsPerBoundaryNotAccumulated(t *testing.T) {
+	// Three clips: a->b has no gap, b->c requests more overlap than b alone
+	// is long but less than the whole accumulated buffer (a+b) so far. The
+	// clamp must be against b's own length, never reaching back into a.
+	a := &PCM{Samples: []int16{100, 101}, SampleRate: 1000}
+	b := &PCM{Samples: []int16{200, 201}, SampleRate: 1000}
+	c := &PCM{Samples: []int16{1, 2, 3, 4, 5}, SampleRate: 1000}
+
+	out := Concat([]*PCM{a, b, c}, []int{0, -3})
+
+	want := []int16{100, 101, 200 + 1, 201 + 2, 3, 4, 5}
+	if len(out.Samples) != len(want) {
+		t.Fatalf("len = %d, want %d: got=%v want=%v", len(out.Samples), len(want), out.Samples, want)
+	}
+	for i, w := range want {
+		if out.Samples[i] != w {
+			t.Errorf("sample %d = %d, want %d (got=%v)", i, out.Samples[i], w, out.Samples)
+		}
+	}
+}
+
+func TestConcat_OverlapSumClampsToInt16Range(t *testing.T) {
+	a := &PCM{Samples: []int16{32000}, SampleRate: 1000}
+	b := &PCM{Samples: []int16{32000}, SampleRate: 1000}
+
+	out := Concat([]*PCM{a, b}, []int{-1})
+
+	if len(out.Samples) != 1 || out.Samples[0] != math.MaxInt16 {
+		t.Fatalf("got %v, want a single sample clamped to MaxInt16", out.Samples)
+	}
+}
+
 func TestConcatEmpty(t *testing.T) {
-	if got := Concat(nil, 100); got != nil {
+	if got := Concat(nil, nil); got != nil {
 		t.Fatalf("got %v, want nil for empty input", got)
 	}
 }

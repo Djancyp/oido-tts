@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"oido-tts/internal/tts"
 )
 
 // resolveBundledPaths resolves paths relative to os.Executable(), which in
@@ -91,5 +93,21 @@ func TestBuildComposeJobs_InlineTagWithNoSidebarDefaultLeavesUntaggedPartEmpty(t
 	}
 	if jobs[0].Instruct != "" {
 		t.Errorf("first job Instruct = %q, want empty (no sidebar default set)", jobs[0].Instruct)
+	}
+}
+
+func TestBuildComposeJobs_PauseTagSetsGapOnlyOnFirstJobOfSegment(t *testing.T) {
+	jobs := BuildComposeJobs("First part. [pause:2s] Second part.", "", "")
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want 2: %+v", len(jobs), jobs)
+	}
+	if jobs[0].GapBeforeMs != tts.NoGap {
+		t.Errorf("job 0 GapBeforeMs = %d, want tts.NoGap", jobs[0].GapBeforeMs)
+	}
+	if jobs[1].GapBeforeMs != 2000 {
+		t.Errorf("job 1 GapBeforeMs = %d, want 2000", jobs[1].GapBeforeMs)
+	}
+	if strings.ContainsAny(jobs[1].Text, "[]") {
+		t.Errorf("pause tag leaked into job text: %q", jobs[1].Text)
 	}
 }
