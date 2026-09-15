@@ -9,7 +9,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {Globe, Mic, FolderOpen, Play, Pause, X} from 'lucide-react';
+import {Globe, Mic, Play, Pause, X, Download} from 'lucide-react';
 import {Events} from '@wailsio/runtime';
 import {App as AppService, type ProgressEvent} from '../../bindings/oido-tts';
 import {RecordVoiceDialog} from '@/components/RecordVoiceDialog';
@@ -46,23 +46,22 @@ type Phase = 'idle' | 'ready' | 'working' | 'done' | 'error';
 
 const STORAGE_KEY = 'oido-tts-podcast-settings';
 
-function loadSettings(): {lang: string; hostVoice: string; guestVoice: string; outputDir: string} {
+function loadSettings(): {lang: string; hostVoice: string; guestVoice: string} {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return {lang: AUTO_LANG, hostVoice: '', guestVoice: '', outputDir: ''};
+        if (!raw) return {lang: AUTO_LANG, hostVoice: '', guestVoice: ''};
         const parsed = JSON.parse(raw);
         return {
             lang: parsed.lang ?? AUTO_LANG,
             hostVoice: parsed.hostVoice ?? '',
             guestVoice: parsed.guestVoice ?? '',
-            outputDir: parsed.outputDir ?? '',
         };
     } catch {
-        return {lang: AUTO_LANG, hostVoice: '', guestVoice: '', outputDir: ''};
+        return {lang: AUTO_LANG, hostVoice: '', guestVoice: ''};
     }
 }
 
-function saveSettings(settings: {lang: string; hostVoice: string; guestVoice: string; outputDir: string}) {
+function saveSettings(settings: {lang: string; hostVoice: string; guestVoice: string}) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     } catch {
@@ -76,9 +75,10 @@ export function PodcastView() {
     const [lang, setLang] = useState(initial.lang);
     const [hostVoice, setHostVoice] = useState(initial.hostVoice);
     const [guestVoice, setGuestVoice] = useState(initial.guestVoice);
-    const [outputDir, setOutputDir] = useState(initial.outputDir);
     const [audioUrl, setAudioUrl] = useState('');
+    const [audioB64, setAudioB64] = useState('');
     const [savedPath, setSavedPath] = useState('');
+    const [saveError, setSaveError] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
     const [busy, setBusy] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -90,8 +90,8 @@ export function PodcastView() {
     const audioRef = useRef<HTMLAudioElement>(null);
 
     useEffect(() => {
-        saveSettings({lang, hostVoice, guestVoice, outputDir});
-    }, [lang, hostVoice, guestVoice, outputDir]);
+        saveSettings({lang, hostVoice, guestVoice});
+    }, [lang, hostVoice, guestVoice]);
 
     useEffect(() => {
         return Events.On('podcast:progress', (e: {data: ProgressEvent}) => {
@@ -116,25 +116,28 @@ export function PodcastView() {
         else setGuestVoice(path);
     }
 
-    async function pickOutputDir() {
-        const path = await AppService.PickOutputFolder();
-        if (path) setOutputDir(path);
-    }
-
     async function build() {
         if (!script.trim() || busy) return;
         setBusy(true);
         setErrorMsg('');
         setProgress(0);
+        // clear any previous result up front — otherwise a failed/stopped
+        // run leaves the last successful episode visibly playable, looking
+        // like *this* run's (possibly much shorter) result
+        setAudioUrl('');
+        setAudioB64('');
+        setSavedPath('');
+        setSaveError('');
         try {
             const result = await AppService.BuildPodcast(
                 script,
                 {[HOST]: hostVoice, [GUEST]: guestVoice},
                 lang === AUTO_LANG ? '' : lang,
-                outputDir
+                ''
             );
             if (!result) throw new Error('No result returned');
             setAudioUrl(`data:audio/wav;base64,${result.audioB64}`);
+            setAudioB64(result.audioB64);
             setSavedPath(result.savedPath ?? '');
         } catch (err) {
             if (!String(err).includes('stopped')) {
@@ -151,11 +154,23 @@ export function PodcastView() {
 
     function buildAgain() {
         setAudioUrl('');
+        setAudioB64('');
         setSavedPath('');
+        setSaveError('');
         setErrorMsg('');
         setIsPlaying(false);
         setCurrentTime(0);
         setDuration(0);
+    }
+
+    async function saveAudio() {
+        setSaveError('');
+        try {
+            const path = await AppService.SaveGeneratedAudio(audioB64, 'podcast.wav', '');
+            if (path) setSavedPath(path);
+        } catch (err) {
+            setSaveError(String(err));
+        }
     }
 
     function togglePlay() {
@@ -260,21 +275,6 @@ export function PodcastView() {
                     </Button>
                 </div>
 
-                <div className="flex flex-col gap-2">
-                    <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                        <FolderOpen className="size-3.5" />
-                        Output folder
-                    </label>
-                    <Button
-                        variant="outline"
-                        className="w-full justify-start truncate bg-muted font-normal"
-                        onClick={pickOutputDir}
-                        title={outputDir}
-                    >
-                        {outputDir || 'Playback only — nothing saved'}
-                    </Button>
-                </div>
-
                 <div className="mt-auto border-t border-border pt-4 text-[11px] leading-relaxed text-muted-foreground">
                     Runs fully on-device. No text leaves this machine.
                 </div>
@@ -363,6 +363,14 @@ export function PodcastView() {
                             <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
                                 {formatTime(currentTime)} / {formatTime(duration)}
                             </span>
+                            <button
+                                onClick={saveAudio}
+                                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary-foreground/10"
+                                aria-label="Save audio"
+                                title="Save audio"
+                            >
+                                <Download className="size-4" />
+                            </button>
                             <button onClick={buildAgain} className="shrink-0 text-xs font-medium text-primary">
                                 New
                             </button>
@@ -383,6 +391,9 @@ export function PodcastView() {
 
                 {phase === 'done' && savedPath && (
                     <p className="text-xs text-muted-foreground">Saved to {savedPath}</p>
+                )}
+                {phase === 'done' && saveError && (
+                    <p className="text-xs text-destructive">Couldn't save: {saveError}</p>
                 )}
             </main>
 

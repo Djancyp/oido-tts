@@ -9,7 +9,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {Globe, Mic, FolderOpen, Play, Pause, Sparkles, X} from 'lucide-react';
+import {Globe, Mic, Play, Pause, Sparkles, X, Download} from 'lucide-react';
 import {Events} from '@wailsio/runtime';
 import {App as AppService, type ProgressEvent} from '../../bindings/oido-tts';
 import {RecordVoiceDialog} from '@/components/RecordVoiceDialog';
@@ -35,23 +35,22 @@ type Phase = 'idle' | 'composing' | 'working' | 'done' | 'error';
 
 const STORAGE_KEY = 'oido-tts-settings';
 
-function loadSettings(): {lang: string; speakerFile: string; outputDir: string; instruct: string} {
+function loadSettings(): {lang: string; speakerFile: string; instruct: string} {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return {lang: AUTO_LANG, speakerFile: '', outputDir: '', instruct: ''};
+        if (!raw) return {lang: AUTO_LANG, speakerFile: '', instruct: ''};
         const parsed = JSON.parse(raw);
         return {
             lang: parsed.lang ?? AUTO_LANG,
             speakerFile: parsed.speakerFile ?? '',
-            outputDir: parsed.outputDir ?? '',
             instruct: parsed.instruct ?? '',
         };
     } catch {
-        return {lang: AUTO_LANG, speakerFile: '', outputDir: '', instruct: ''};
+        return {lang: AUTO_LANG, speakerFile: '', instruct: ''};
     }
 }
 
-function saveSettings(settings: {lang: string; speakerFile: string; outputDir: string; instruct: string}) {
+function saveSettings(settings: {lang: string; speakerFile: string; instruct: string}) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     } catch {
@@ -64,10 +63,11 @@ export function ComposeView() {
     const [text, setText] = useState('');
     const [lang, setLang] = useState(initial.lang);
     const [speakerFile, setSpeakerFile] = useState(initial.speakerFile);
-    const [outputDir, setOutputDir] = useState(initial.outputDir);
     const [instruct, setInstruct] = useState(initial.instruct);
     const [audioUrl, setAudioUrl] = useState('');
+    const [audioB64, setAudioB64] = useState('');
     const [savedPath, setSavedPath] = useState('');
+    const [saveError, setSaveError] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
     const [busy, setBusy] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -79,8 +79,8 @@ export function ComposeView() {
     const audioRef = useRef<HTMLAudioElement>(null);
 
     useEffect(() => {
-        saveSettings({lang, speakerFile, outputDir, instruct});
-    }, [lang, speakerFile, outputDir, instruct]);
+        saveSettings({lang, speakerFile, instruct});
+    }, [lang, speakerFile, instruct]);
 
     useEffect(() => {
         return Events.On('tts:progress', (e: {data: ProgressEvent}) => {
@@ -103,20 +103,23 @@ export function ComposeView() {
         if (path) setSpeakerFile(path);
     }
 
-    async function pickOutputDir() {
-        const path = await AppService.PickOutputFolder();
-        if (path) setOutputDir(path);
-    }
-
     async function speak() {
         if (!text.trim() || busy) return;
         setBusy(true);
         setErrorMsg('');
         setProgress(0);
+        // clear any previous result up front — otherwise a failed/stopped
+        // run leaves the last successful clip visibly playable, looking
+        // like *this* run's (possibly much shorter) result
+        setAudioUrl('');
+        setAudioB64('');
+        setSavedPath('');
+        setSaveError('');
         try {
-            const result = await AppService.Synthesize(text, lang === AUTO_LANG ? '' : lang, speakerFile, instruct, outputDir);
+            const result = await AppService.Synthesize(text, lang === AUTO_LANG ? '' : lang, speakerFile, instruct, '');
             if (!result) throw new Error('No result returned');
             setAudioUrl(`data:audio/wav;base64,${result.audioB64}`);
+            setAudioB64(result.audioB64);
             setSavedPath(result.savedPath ?? '');
         } catch (err) {
             if (!String(err).includes('stopped')) {
@@ -133,11 +136,23 @@ export function ComposeView() {
 
     function speakAgain() {
         setAudioUrl('');
+        setAudioB64('');
         setSavedPath('');
+        setSaveError('');
         setErrorMsg('');
         setIsPlaying(false);
         setCurrentTime(0);
         setDuration(0);
+    }
+
+    async function saveAudio() {
+        setSaveError('');
+        try {
+            const path = await AppService.SaveGeneratedAudio(audioB64, 'speech.wav', '');
+            if (path) setSavedPath(path);
+        } catch (err) {
+            setSaveError(String(err));
+        }
     }
 
     function togglePlay() {
@@ -234,21 +249,6 @@ export function ComposeView() {
                     </p>
                 </div>
 
-                <div className="flex flex-col gap-2">
-                    <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                        <FolderOpen className="size-3.5" />
-                        Output folder
-                    </label>
-                    <Button
-                        variant="outline"
-                        className="w-full justify-start truncate bg-muted font-normal"
-                        onClick={pickOutputDir}
-                        title={outputDir}
-                    >
-                        {outputDir || 'Playback only — nothing saved'}
-                    </Button>
-                </div>
-
                 <div className="mt-auto border-t border-border pt-4 text-[11px] leading-relaxed text-muted-foreground">
                     Runs fully on-device. No text leaves this machine.
                 </div>
@@ -327,6 +327,14 @@ export function ComposeView() {
                             <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
                                 {formatTime(currentTime)} / {formatTime(duration)}
                             </span>
+                            <button
+                                onClick={saveAudio}
+                                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary-foreground/10"
+                                aria-label="Save audio"
+                                title="Save audio"
+                            >
+                                <Download className="size-4" />
+                            </button>
                             <button onClick={speakAgain} className="shrink-0 text-xs font-medium text-primary">
                                 New
                             </button>
@@ -347,6 +355,9 @@ export function ComposeView() {
 
                 {phase === 'done' && savedPath && (
                     <p className="text-xs text-muted-foreground">Saved to {savedPath}</p>
+                )}
+                {phase === 'done' && saveError && (
+                    <p className="text-xs text-destructive">Couldn't save: {saveError}</p>
                 )}
             </main>
 

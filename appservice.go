@@ -123,6 +123,21 @@ func (a *App) beginJob(timeout time.Duration) (context.Context, func(), error) {
 	return ctx, release, nil
 }
 
+// jobTimeout budgets a synthesis run by how many sequential llama-tts calls
+// it needs: each call reloads the full model from scratch (no shared
+// server process), which measured ~15-20s even for a short chunk on this
+// hardware — a fixed cap sized for a few sentences silently truncates any
+// longer text once real chunk count grows (a full article easily hits
+// 20-30 chunks). perJobBudget is deliberately generous since a timeout
+// mid-run fails the entire request, not just the slow chunk.
+func jobTimeout(jobCount int) time.Duration {
+	const (
+		floor        = 2 * time.Minute
+		perJobBudget = 60 * time.Second
+	)
+	return floor + time.Duration(jobCount)*perJobBudget
+}
+
 // Synthesize converts text to speech, optionally cloning a voice from
 // speakerFile (a wav/mp3 reference clip). lang is a language code such as
 // "en", "zh", "ja" — empty uses the model default. instruct is an optional
@@ -155,13 +170,13 @@ func (a *App) Synthesize(text, lang, speakerFile, instruct, outputDir string) (*
 		defer os.Remove(outPath) // audio is returned as base64; the file on disk is scratch space only
 	}
 
-	ctx, release, err := a.beginJob(5 * time.Minute)
+	jobs := synth.BuildComposeJobs(text, speakerFile, instruct)
+
+	ctx, release, err := a.beginJob(jobTimeout(len(jobs)))
 	if err != nil {
 		return nil, err
 	}
 	defer release()
-
-	jobs := synth.BuildComposeJobs(text, speakerFile, instruct)
 
 	app := application.Get()
 	if err := synth.RunSequentialJobs(ctx, engine, jobs, lang, outPath, true, func(percent float64) {
@@ -225,9 +240,7 @@ func (a *App) BuildPodcast(script string, voices map[string]string, lang, output
 		defer os.Remove(outPath)
 	}
 
-	// Podcasts are typically many turns; give them more headroom than a
-	// single Compose call before the context times out.
-	ctx, release, err := a.beginJob(20 * time.Minute)
+	ctx, release, err := a.beginJob(jobTimeout(len(turns)))
 	if err != nil {
 		return nil, err
 	}
@@ -295,6 +308,39 @@ func (a *App) PickOutputFolder() (string, error) {
 		CanChooseFiles(false).
 		CanChooseDirectories(true).
 		PromptForSingleSelection()
+}
+
+// SaveGeneratedAudio opens a native "Save As" dialog defaulting to
+// suggestedName and writes audioB64 (the wav bytes returned by Synthesize/
+// BuildPodcast) to the chosen path — for a result that was only played
+// back, not auto-saved via outputDir. defaultDir, when non-empty, is the
+// directory the dialog opens in (e.g. the sidebar's configured Output
+// folder), so a user who already picked one doesn't have to navigate back
+// to it every time. Returns the chosen path, or "" if the user cancelled
+// the dialog.
+func (a *App) SaveGeneratedAudio(audioB64, suggestedName, defaultDir string) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(audioB64)
+	if err != nil {
+		return "", fmt.Errorf("decode audio: %w", err)
+	}
+
+	dialog := application.Get().Dialog.SaveFile().
+		SetMessage("Save audio").
+		SetFilename(suggestedName).
+		AddFilter("WAV audio", "*.wav")
+	if defaultDir != "" {
+		dialog.SetDirectory(defaultDir)
+	}
+
+	path, err := dialog.PromptForSingleSelection()
+	if err != nil || path == "" {
+		return "", err
+	}
+
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return "", fmt.Errorf("write audio file: %w", err)
+	}
+	return path, nil
 }
 
 // StartRecording begins capturing microphone audio via the system's

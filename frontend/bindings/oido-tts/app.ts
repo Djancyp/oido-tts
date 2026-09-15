@@ -79,6 +79,20 @@ export function PickSpeakerFile(): $CancellablePromise<string> {
 }
 
 /**
+ * SaveGeneratedAudio opens a native "Save As" dialog defaulting to
+ * suggestedName and writes audioB64 (the wav bytes returned by Synthesize/
+ * BuildPodcast) to the chosen path — for a result that was only played
+ * back, not auto-saved via outputDir. defaultDir, when non-empty, is the
+ * directory the dialog opens in (e.g. the sidebar's configured Output
+ * folder), so a user who already picked one doesn't have to navigate back
+ * to it every time. Returns the chosen path, or "" if the user cancelled
+ * the dialog.
+ */
+export function SaveGeneratedAudio(audioB64: string, suggestedName: string, defaultDir: string): $CancellablePromise<string> {
+    return $Call.ByID(3138381877, audioB64, suggestedName, defaultDir);
+}
+
+/**
  * StartRecording begins capturing microphone audio via the system's
  * arecord for use as a voice-cloning reference. See internal/recorder
  * for why this happens natively instead of via the browser's
